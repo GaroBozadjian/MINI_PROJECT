@@ -1,13 +1,15 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, Field
 import pandas as pd
-from sklearn.datasets import load_iris
+from sqlalchemy.orm import Session
+from sqlalchemy import select, func
 
+from app.db import get_db
+from app.models import IrisRow
 from app.ml.model import predict, ModelNotTrainedError
 
 app = FastAPI(title="ML Dashboard Demo", version="1.0.0")
 
-# --- Pydantic schemas ---
 class PredictRequest(BaseModel):
     sepal_length: float = Field(..., example=5.1)
     sepal_width: float = Field(..., example=3.5)
@@ -17,25 +19,39 @@ class PredictRequest(BaseModel):
 class AnalyzeResponse(BaseModel):
     rows: int
     columns: int
-    describe: dict  # pandas describe() to dict
+    describe: dict
 
 
-# --- Helpers ---
-def iris_dataframe() -> pd.DataFrame:
-    iris = load_iris(as_frame=True)
-    df = iris.frame.copy()
-    # df includes target; keep it for analysis
-    return df
-
-
-# --- Routes ---
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
+
+@app.get("/db-info")
+def db_info(db: Session = Depends(get_db)):
+    total = db.execute(select(func.count(IrisRow.id))).scalar_one()
+    return {"rows_in_iris_table": int(total)}
+
+
 @app.get("/analyze", response_model=AnalyzeResponse)
-def analyze():
-    df = iris_dataframe()
+def analyze(db: Session = Depends(get_db)):
+    # Pull data directly from DB (no helper)
+    rows = db.execute(select(IrisRow)).scalars().all()
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="No data found in DB. Run: python -m app.seed_db"
+        )
+
+    # Convert DB rows -> DataFrame
+    df = pd.DataFrame([{
+        "sepal_length": r.sepal_length,
+        "sepal_width": r.sepal_width,
+        "petal_length": r.petal_length,
+        "petal_width": r.petal_width,
+        "target": r.target,
+    } for r in rows])
+
     desc = df.describe(include="all").to_dict()
     return {
         "rows": int(df.shape[0]),
@@ -43,16 +59,17 @@ def analyze():
         "describe": desc,
     }
 
+
 @app.post("/predict")
 def predict_endpoint(req: PredictRequest):
+    # Prediction uses the trained model artifact; inputs come from dashboard
     try:
-        result = predict([
+        return predict([
             req.sepal_length,
             req.sepal_width,
             req.petal_length,
             req.petal_width
         ])
-        return result
     except ModelNotTrainedError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

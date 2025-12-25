@@ -8,3 +8,4 @@ venv/
 .vscode/
 *.log
 sampledata/Iris.csv
+backend/app/iris.db
