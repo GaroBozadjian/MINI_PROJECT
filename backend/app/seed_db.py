@@ -5,8 +5,9 @@ from sqlalchemy import select, func
 from app.db import engine, SessionLocal, Base
 from app.models import IrisRow
 
-# Point to your CSV file here
-CSV_PATH = Path(__file__).resolve().parents[2] / "sampledata" / "iris.csv"
+# Directory where seed_db.py lives: /app/app inside container
+BASE_DIR = Path(__file__).resolve().parent
+CSV_PATH = BASE_DIR / "iris.csv"   # /app/app/iris.csv in container
 
 # Map CSV headers -> DB column names (edit if needed)
 COLUMN_MAP = {

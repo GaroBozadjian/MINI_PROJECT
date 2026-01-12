@@ -9,3 +9,5 @@ venv/
 *.log
 sampledata/Iris.csv
 backend/app/iris.db
+venv_backend/
+venv_frontend

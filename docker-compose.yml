@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: iris-backend
+    ports:
+      - "8000:8000"
+    # Bind mount backend/app into /app/app inside container
+    volumes:
+      - ./backend/app:/app/app
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: iris-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE=http://backend:8000
+    restart: unless-stopped
+
+  sqlite-viewer:
+    image: coleifer/sqlite-web
+    container_name: iris-sqlite-viewer
+    depends_on:
+      - backend
+    volumes:
+      # Same folder, now mounted as /data
+      - ./backend/app:/data
+    # Proper command: run sqlite_web with db file, don't try to "execute" iris.db
+    command: ["sqlite_web", "/data/iris.db", "--host", "0.0.0.0", "--port", "8080"]
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
